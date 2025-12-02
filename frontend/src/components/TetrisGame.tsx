@@ -2,9 +2,10 @@
 import { useEffect, useRef } from 'react'
 import TetrisBoard from './TetrisBoard'
 import useKeyboardControls from '@/hooks/useKeyboardControls'
+import { GameState } from '@/types/game'
 
 interface TetrisGameProps {
-  gameState: any
+  gameState: GameState | null
   playerId: string
   isSpectator: boolean
   onAction: (action: string, data?: any) => void
@@ -61,34 +62,39 @@ export default function TetrisGame({ gameState, playerId, isSpectator, onAction 
       </div>
     )
   }
-  
+
   // プレイヤーの状態を取得
-  const playerState = gameState.players[playerId]
-  const isGameOver = playerState?.isGameOver
+  const playerState = gameState.players?.[playerId]
+  const isGameOver = playerState?.isGameOver || false
   const isWinner = gameState.winner === playerId
-  
+
   // ゲームの表示内容を決定
   let boardToShow
-  
+  let currentPiece = null
+  let nextPiece = null
+
   if (playerState) {
     // 自分のプレイヤーデータがある場合
     boardToShow = playerState.board
-  } else if (gameState.activePlayers.length > 0) {
+    currentPiece = playerState.currentPiece
+    nextPiece = playerState.nextPiece
+  } else if (gameState.activePlayers?.length > 0) {
     // 観戦モードの場合は一番最初のアクティブプレイヤーを表示
     const firstPlayerId = gameState.activePlayers[0]
-    boardToShow = gameState.players[firstPlayerId]?.board
-  } else if (gameState.spectators.length > 0) {
+    const firstPlayerState = gameState.players?.[firstPlayerId]
+    boardToShow = firstPlayerState?.board
+    // 観戦モードでは相手のピースは表示しない
+  } else if (gameState.spectators?.length > 0) {
     // アクティブプレイヤーがいない場合は最初の観戦者を表示
     const firstSpectatorId = gameState.spectators[0]
-    boardToShow = gameState.players[firstSpectatorId]?.board
-  } else {
-    // どのプレイヤーもいない場合は空のボードを表示
+    const spectatorState = gameState.players?.[firstSpectatorId]
+    boardToShow = spectatorState?.board
+  }
+
+  // ボードが存在しない場合は空のボードを表示
+  if (!boardToShow) {
     boardToShow = Array(20).fill(0).map(() => Array(10).fill(0))
   }
-  
-  // 現在のピースの情報を取得
-  const currentPiece = playerState?.currentPiece
-  const nextPiece = playerState?.nextPiece
 
   
   return (

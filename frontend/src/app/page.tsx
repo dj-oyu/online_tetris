@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { io, Socket } from 'socket.io-client'
 import GameRoom from '@/components/GameRoom'
+import { RoomInfo } from '@/types/game'
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8080'
 
@@ -11,7 +12,7 @@ export default function Home() {
   const [userId, setUserId] = useState<string>('')
   const [username, setUsername] = useState<string>('')
   const [roomId, setRoomId] = useState<string | null>(null)
-  const [availableRooms, setAvailableRooms] = useState<any[]>([])
+  const [availableRooms, setAvailableRooms] = useState<RoomInfo[]>([])
   const [isConnected, setIsConnected] = useState<boolean>(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -37,53 +38,91 @@ export default function Home() {
     if (userId && !socket) {
       // Socket.IO接続を確立
       const newSocket = io(BACKEND_URL, {
-        transports: ['polling', 'websocket'],
+        transports: ['websocket', 'polling'],
         path: '/socket.io',
-        withCredentials: true
+        withCredentials: true,
+        reconnection: true,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        reconnectionAttempts: 5
       })
-      
+
       newSocket.on('connect', () => {
         console.log('Connected to server')
         setIsConnected(true)
         setError(null)
-        
+
         // ユーザー認証
         newSocket.emit('auth', { userId, username })
-        
+
         // ルーム一覧を取得
         newSocket.emit('getRooms')
       })
-      
+
       newSocket.on('connect_error', (err) => {
         console.error('Connection error:', err)
         setIsConnected(false)
-        setError('サーバーに接続できませんでした。')
+        setError('サーバーに接続できませんでした。再接続を試みています...')
       })
-      
+
+      newSocket.on('reconnect', (attemptNumber) => {
+        console.log('Reconnected to server after', attemptNumber, 'attempts')
+        setIsConnected(true)
+        setError(null)
+
+        // 再接続後にユーザー認証とルーム一覧を再取得
+        newSocket.emit('auth', { userId, username })
+        newSocket.emit('getRooms')
+      })
+
+      newSocket.on('reconnect_attempt', (attemptNumber) => {
+        console.log('Reconnection attempt', attemptNumber)
+        setError(`サーバーに再接続中... (試行 ${attemptNumber}/5)`)
+      })
+
+      newSocket.on('reconnect_failed', () => {
+        console.error('Reconnection failed')
+        setIsConnected(false)
+        setError('サーバーへの再接続に失敗しました。ページを再読み込みしてください。')
+      })
+
       newSocket.on('roomList', (rooms) => {
         setAvailableRooms(rooms)
       })
-      
+
       newSocket.on('roomListUpdated', () => {
         // ルーム一覧を更新
         newSocket.emit('getRooms')
       })
 
-      newSocket.on('disconnect', () => {
-        console.log('Disconnected from server')
+      newSocket.on('disconnect', (reason) => {
+        console.log('Disconnected from server, reason:', reason)
         setIsConnected(false)
-        setError('サーバーとの接続が切断されました。')
+
+        if (reason === 'io server disconnect') {
+          // サーバーから切断された場合、手動で再接続
+          setError('サーバーから切断されました。再接続しています...')
+          newSocket.connect()
+        } else {
+          setError('サーバーとの接続が切断されました。自動再接続を試みています...')
+        }
       })
 
       // ルーム作成時にroomIdをセット
       newSocket.on('roomCreated', (room) => {
-        if (room?.id) setRoomId(room.id);
-      });
+        if (room?.id) setRoomId(room.id)
+      })
 
       // 30秒経過で強制スタート通知
       newSocket.on('forceStart', (data) => {
-        alert(data?.message || '30秒経過で強制スタートします');
-      });
+        alert(data?.message || '30秒経過で強制スタートします')
+      })
+
+      // エラーハンドリング
+      newSocket.on('error', (error: { message: string }) => {
+        console.error('Socket error:', error)
+        setError(error.message || 'エラーが発生しました。')
+      })
 
       setSocket(newSocket)
 
@@ -92,7 +131,7 @@ export default function Home() {
         newSocket.disconnect()
       }
     }
-  }, [userId])
+  }, [userId, username])
 
   // ユーザー名を設定
   const handleSetUsername = (name: string) => {

@@ -1,8 +1,9 @@
 'use client'
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import TetrisGame from './TetrisGame'
 import { Socket } from 'socket.io-client'
 import MiniBoard from './MiniBoard'
+import { GameState, RoomInfo, PlayerInfo, ChatMessage } from '@/types/game'
 
 interface GameRoomProps {
   socket: Socket | null
@@ -12,17 +13,11 @@ interface GameRoomProps {
   onLeave: () => void
 }
 
-interface PlayerInfo {
-  id: string
-  username: string
-  isReady: boolean
-}
-
 export default function GameRoom({ socket, roomId, userId, username, onLeave }: GameRoomProps) {
-  const [roomInfo, setRoomInfo] = useState<any>(null)
-  const [gameState, setGameState] = useState<any>(null)
+  const [roomInfo, setRoomInfo] = useState<RoomInfo | null>(null)
+  const [gameState, setGameState] = useState<GameState | null>(null)
   const [isReady, setIsReady] = useState<boolean>(false)
-  const [chatMessages, setChatMessages] = useState<any[]>([])
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
   const [messageInput, setMessageInput] = useState<string>('')
   const [isSpectator, setIsSpectator] = useState<boolean>(false)
   
@@ -88,44 +83,44 @@ export default function GameRoom({ socket, roomId, userId, username, onLeave }: 
   }, [socket, userId])
   
   // チャットメッセージを追加
-  const addChatMessage = (message: any) => {
+  const addChatMessage = useCallback((message: Partial<ChatMessage>) => {
     setChatMessages((prev) => [...prev, {
       ...message,
       id: Date.now()
-    }])
-  }
-  
+    } as ChatMessage])
+  }, [])
+
   // メッセージを送信
-  const sendMessage = () => {
+  const sendMessage = useCallback(() => {
     if (!socket || !messageInput.trim()) return
-    
+
     socket.emit('chatMessage', { message: messageInput })
     setMessageInput('')
-  }
-  
+  }, [socket, messageInput])
+
   // 準備状態を切り替え
-  const toggleReady = () => {
+  const toggleReady = useCallback(() => {
     if (!socket) return
-    
+
     const newState = !isReady
     socket.emit('playerReady', { ready: newState })
     setIsReady(newState)
-  }
-  
+  }, [socket, isReady])
+
   // ルームから退出
-  const leaveRoom = () => {
+  const leaveRoom = useCallback(() => {
     if (!socket) return
-    
+
     socket.emit('leaveRoom')
     onLeave()
-  }
-  
+  }, [socket, onLeave])
+
   // ゲームアクションを送信
-  const sendGameAction = (action: string, data?: any) => {
+  const sendGameAction = useCallback((action: string, data?: any) => {
     if (!socket || isSpectator) return
-    
+
     socket.emit('gameAction', { action, data })
-  }
+  }, [socket, isSpectator])
   
   if (!roomInfo) {
     return (
@@ -141,15 +136,18 @@ export default function GameRoom({ socket, roomId, userId, username, onLeave }: 
   const isFinished = roomInfo.state === 'finished'
   
   // 自分のプレイヤー情報を取得
-  const myPlayer = gameState?.players?.[userId]
-  
+  const myPlayer = useMemo(() => gameState?.players?.[userId], [gameState, userId])
+
   // 他のプレイヤー情報を取得
-  const otherPlayers = gameState ? Object.entries(gameState.players)
-    .filter(([id]: [string, any]) => id !== userId)
-    .map(([id, data]: [string, any]) => ({
-      id,
-      ...data
-    })) : []
+  const otherPlayers = useMemo(() => {
+    if (!gameState) return []
+    return Object.entries(gameState.players)
+      .filter(([id]) => id !== userId)
+      .map(([id, data]) => ({
+        id,
+        ...data
+      }))
+  }, [gameState, userId])
   
   return (
     <div className="flex flex-col h-screen max-h-screen py-4">

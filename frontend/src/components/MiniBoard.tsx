@@ -1,10 +1,10 @@
-import React from 'react'
+import React, { memo } from 'react'
 
 interface MiniBoardProps {
   board: number[][]
 }
 
-export default function MiniBoard({ board }: MiniBoardProps) {
+const MiniBoard = memo(function MiniBoard({ board }: MiniBoardProps) {
   // 数値からピースのタイプを取得
   const getPieceTypeFromNumber = (num: number): string => {
     const types = ['', 'I', 'J', 'L', 'O', 'S', 'T', 'Z', '8']
@@ -44,4 +44,6 @@ export default function MiniBoard({ board }: MiniBoardProps) {
       ))}
     </div>
   )
-}
+})
+
+export default MiniBoard
