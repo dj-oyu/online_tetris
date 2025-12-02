@@ -41,6 +41,9 @@ export default function GameRoom({ socket, roomId, userId, username, onLeave }: 
       setGameState(state)
       if (state.spectators.includes(userId)) {
         setIsSpectator(true)
+      } else if (state.players[userId]) {
+        // gameState.playersに自分のIDが含まれていればプレイヤー扱い
+        setIsSpectator(false)
       }
     }
 
