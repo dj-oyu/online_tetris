@@ -5,7 +5,10 @@ import { v4 as uuidv4 } from 'uuid'
 import { io, Socket } from 'socket.io-client'
 import { RoomInfo } from '@/types/game'
 
-const GameRoom = dynamic(() => import('@/components/GameRoom'), { suspense: true })
+const GameRoom = dynamic(() => import('@/components/GameRoom'), { 
+  ssr: false,
+  loading: () => <div className="flex items-center justify-center min-h-screen"><div className="text-xl">ルーム情報を読み込み中...</div></div>
+})
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8080'
 
@@ -198,15 +201,13 @@ export default function Home() {
 
   if (roomId) {
     return (
-      <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><div className="text-xl">ルーム情報を読み込み中...</div></div>}>
-        <GameRoom
-          socket={socket!}
-          userId={userId}
-          username={username}
-          roomId={roomId}
-          onLeave={handleLeaveRoom}
-        />
-      </Suspense>
+      <GameRoom
+        socket={socket!}
+        userId={userId}
+        username={username}
+        roomId={roomId}
+        onLeave={handleLeaveRoom}
+      />
     )
   }
 
