@@ -56,6 +56,14 @@ export default function GameRoom({ socket, roomId, userId, username, onLeave }: 
     }
   }, [socket, userId])
 
+  // チャットメッセージを追加
+  const addChatMessage = useCallback((message: Partial<ChatMessage>) => {
+    setChatMessages((prev) => [...prev, {
+      ...message,
+      id: Date.now()
+    } as ChatMessage])
+  }, [])
+
   // チャット・通知イベントを監視
   useEffect(() => {
     if (!socket) return
@@ -97,14 +105,6 @@ export default function GameRoom({ socket, roomId, userId, username, onLeave }: 
       socket.off('gameOver', handleGameOver)
     }
   }, [socket, addChatMessage])
-  
-  // チャットメッセージを追加
-  const addChatMessage = useCallback((message: Partial<ChatMessage>) => {
-    setChatMessages((prev) => [...prev, {
-      ...message,
-      id: Date.now()
-    } as ChatMessage])
-  }, [])
 
   // メッセージを送信
   const sendMessage = useCallback(() => {
