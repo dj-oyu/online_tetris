@@ -1,0 +1,289 @@
+'use client'
+import React, { useState, useEffect } from 'react'
+import TetrisGame from './TetrisGame'
+import { Socket } from 'socket.io-client'
+import MiniBoard from './MiniBoard'
+
+interface GameRoomProps {
+  socket: Socket | null
+  roomId: string
+  userId: string
+  username: string
+  onLeave: () => void
+}
+
+interface PlayerInfo {
+  id: string
+  username: string
+  isReady: boolean
+}
+
+export default function GameRoom({ socket, roomId, userId, username, onLeave }: GameRoomProps) {
+  const [roomInfo, setRoomInfo] = useState<any>(null)
+  const [gameState, setGameState] = useState<any>(null)
+  const [isReady, setIsReady] = useState<boolean>(false)
+  const [chatMessages, setChatMessages] = useState<any[]>([])
+  const [messageInput, setMessageInput] = useState<string>('')
+  const [isSpectator, setIsSpectator] = useState<boolean>(false)
+  
+  useEffect(() => {
+    if (!socket) return
+    
+    // ルーム情報が更新された時
+    socket.on('roomUpdated', (info) => {
+      setRoomInfo(info)
+      
+      // 自分が観戦者かどうかを判定
+      const playerIds = info.players.map((p: PlayerInfo) => p.id)
+      setIsSpectator(!playerIds.includes(userId))
+    })
+    
+    // ゲーム状態が更新された時
+    socket.on('gameState', (state) => {
+      setGameState(state)
+      
+      // 自分が観戦者になった場合
+      if (state.spectators.includes(userId)) {
+        setIsSpectator(true)
+      }
+    })
+    
+    // プレイヤーが参加した時
+    socket.on('playerJoined', (data) => {
+      addChatMessage({
+        system: true,
+        message: `${data.username}が${data.isPlayer ? '参加' : '観戦'}しました`
+      })
+    })
+    
+    // プレイヤーが退出した時
+    socket.on('playerLeft', (data) => {
+      addChatMessage({
+        system: true,
+        message: `${data.username}が退出しました`
+      })
+    })
+    
+    // チャットメッセージを受信した時
+    socket.on('chatMessage', (message) => {
+      addChatMessage(message)
+    })
+    
+    // ゲームオーバーの通知
+    socket.on('gameOver', (data) => {
+      addChatMessage({
+        system: true,
+        message: `ゲーム終了! ${data.playerName}の勝利です!`
+      })
+    })
+    
+    return () => {
+      socket.off('roomUpdated')
+      socket.off('gameState')
+      socket.off('playerJoined')
+      socket.off('playerLeft')
+      socket.off('chatMessage')
+      socket.off('gameOver')
+    }
+  }, [socket, userId])
+  
+  // チャットメッセージを追加
+  const addChatMessage = (message: any) => {
+    setChatMessages((prev) => [...prev, {
+      ...message,
+      id: Date.now()
+    }])
+  }
+  
+  // メッセージを送信
+  const sendMessage = () => {
+    if (!socket || !messageInput.trim()) return
+    
+    socket.emit('chatMessage', { message: messageInput })
+    setMessageInput('')
+  }
+  
+  // 準備状態を切り替え
+  const toggleReady = () => {
+    if (!socket) return
+    
+    const newState = !isReady
+    socket.emit('playerReady', { ready: newState })
+    setIsReady(newState)
+  }
+  
+  // ルームから退出
+  const leaveRoom = () => {
+    if (!socket) return
+    
+    socket.emit('leaveRoom')
+    onLeave()
+  }
+  
+  // ゲームアクションを送信
+  const sendGameAction = (action: string, data?: any) => {
+    if (!socket || isSpectator) return
+    
+    socket.emit('gameAction', { action, data })
+  }
+  
+  if (!roomInfo) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-xl">ルーム情報を読み込み中...</div>
+      </div>
+    )
+  }
+  
+  const isPlaying = roomInfo.state === 'playing'
+  const isStarting = roomInfo.state === 'starting'
+  const isWaiting = roomInfo.state === 'waiting'
+  const isFinished = roomInfo.state === 'finished'
+  
+  // 自分のプレイヤー情報を取得
+  const myPlayer = gameState?.players?.[userId]
+  
+  // 他のプレイヤー情報を取得
+  const otherPlayers = gameState ? Object.entries(gameState.players)
+    .filter(([id]: [string, any]) => id !== userId)
+    .map(([id, data]: [string, any]) => ({
+      id,
+      ...data
+    })) : []
+  
+  return (
+    <div className="flex flex-col h-screen max-h-screen py-4">
+      <div className="flex justify-between items-center mb-4">
+        <h1 className="text-2xl font-bold">{roomInfo.name}</h1>
+        <div className="flex items-center space-x-4">
+          {isWaiting && !isSpectator && (
+            <button
+              className={`px-4 py-2 rounded font-bold ${isReady ? 'bg-yellow-600 hover:bg-yellow-700' : 'bg-green-600 hover:bg-green-700'}`}
+              onClick={toggleReady}
+            >
+              {isReady ? '準備完了' : '準備する'}
+            </button>
+          )}
+          <button
+            className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded font-bold"
+            onClick={leaveRoom}
+          >
+            退出
+          </button>
+        </div>
+      </div>
+      
+      <div className="flex flex-1 space-x-4 overflow-hidden">
+        {/* メインゲーム画面 */}
+        <div className="flex-1 flex flex-col items-center justify-center">
+          {/* TetrisGameコンポーネントの表示領域を確保 */}
+          <div className="w-[300px] h-[600px] flex-shrink-0"> {/* 固定サイズを指定 */}
+          <TetrisGame
+            gameState={gameState}
+            playerId={userId}
+            isSpectator={isSpectator}
+            onAction={sendGameAction}
+          />
+          </div>
+          
+          {isStarting && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-70 z-50">
+              <div className="text-6xl font-bold animate-pulse">ゲーム開始まもなく...</div>
+            </div>
+          )}
+          
+          {/* ゲーム情報 */}
+          <div className="bg-gray-800 p-4 rounded-lg mt-4">
+            <div className="flex justify-between">
+              <div>
+                <div className="text-xl font-bold mb-1">
+                  {username} {isSpectator && '(観戦中)'}
+                </div>
+                {!isSpectator && myPlayer && (
+                  <div>
+                    <div>スコア: {myPlayer.score}</div>
+                    <div>消去ライン: {myPlayer.linesCleared}</div>
+                  </div>
+                )}
+              </div>
+              <div className="text-right">
+                <div>プレイヤー: {roomInfo.playerCount} / 8</div>
+                <div>観戦者: {roomInfo.spectatorCount}</div>
+                <div className="font-bold">
+                  {isWaiting && '待機中'}
+                  {isStarting && '開始中...'}
+                  {isPlaying && 'ゲーム中'}
+                  {isFinished && '終了'}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        {/* サイドバー */}
+        <div className="w-80 flex flex-col bg-gray-800 rounded-lg overflow-hidden">
+          {/* 他プレイヤーのミニボード */}
+          <div className="p-4 bg-gray-900">
+            <h2 className="text-xl font-bold mb-4">他のプレイヤー</h2>
+            <div className="grid grid-cols-2 gap-2">
+              {otherPlayers.map((player) => (
+                <div key={player.id} className="bg-gray-800 p-2 rounded">
+                  <div className="text-sm font-bold mb-1 truncate">
+                    {player.username}
+                    {player.isGameOver && ' (GameOver)'}
+                  </div>
+                  <MiniBoard board={player.board} />
+                  <div className="flex justify-between text-xs mt-1">
+                    <div>スコア: {player.score}</div>
+                    <div>ライン: {player.linesCleared}</div>
+                  </div>
+                </div>
+              ))}
+              {otherPlayers.length === 0 && (
+                <div className="col-span-2 text-center text-gray-500 py-4">
+                  他のプレイヤーがいません
+                </div>
+              )}
+            </div>
+          </div>
+          
+          {/* チャット */}
+          <div className="flex-1 flex flex-col bg-gray-800 rounded-b-lg overflow-hidden">
+            <h2 className="text-xl font-bold p-4">チャット</h2>
+            <div className="flex-1 overflow-y-auto p-4 bg-gray-700">
+              {chatMessages.map((msg) => (
+                <div key={msg.id} className={`mb-2 ${msg.system ? 'text-yellow-400' : ''}`}>
+                  {!msg.system && <span className="font-bold">{msg.username || 'システム'}: </span>}
+                  {msg.message}
+                </div>
+              ))}
+              {chatMessages.length === 0 && (
+                <div className="text-gray-500 text-center">
+                  メッセージはまだありません
+                </div>
+              )}
+            </div>
+            <div className="p-4 bg-gray-800 border-t border-gray-700">
+              <div className="flex">
+                <input
+                  type="text"
+                  className="flex-1 bg-gray-700 rounded-l p-2 outline-none"
+                  placeholder="メッセージを入力..."
+                  value={messageInput}
+                  onChange={(e) => setMessageInput(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+                />
+                <button
+                  className="bg-blue-600 hover:bg-blue-700 rounded-r px-4"
+                  onClick={sendMessage}
+                >
+                  送信
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
