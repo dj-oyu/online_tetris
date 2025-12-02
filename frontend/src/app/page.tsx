@@ -1,8 +1,9 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { Suspense, useEffect, useState } from 'react'
+import dynamic from 'next/dynamic'
 import { v4 as uuidv4 } from 'uuid'
 import { io, Socket } from 'socket.io-client'
-import GameRoom from '@/components/GameRoom'
+const GameRoom = dynamic(() => import('@/components/GameRoom'), { suspense: true })
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8080'
 
@@ -63,10 +64,15 @@ export default function Home() {
       newSocket.on('roomList', (rooms) => {
         setAvailableRooms(rooms)
       })
-      
+
       newSocket.on('roomListUpdated', () => {
         // ルーム一覧を更新
         newSocket.emit('getRooms')
+      })
+
+      newSocket.on('error', (serverError) => {
+        const message = typeof serverError === 'object' ? serverError?.message : serverError
+        setError(message || 'サーバーでエラーが発生しました。')
       })
 
       newSocket.on('disconnect', () => {
@@ -109,10 +115,17 @@ export default function Home() {
 
   // ルーム参加
   const handleJoinRoom = (roomId: string) => {
-    if (socket) {
-      socket.emit('joinRoom', { roomId })
-      setRoomId(roomId)
-    }
+    if (!socket) return
+
+    socket.emit('joinRoom', { roomId }, (result?: { success: boolean; message?: string }) => {
+      if (result?.success) {
+        setRoomId(roomId)
+        setError(null)
+        return
+      }
+
+      setError(result?.message || 'ルームに参加できませんでした。')
+    })
   }
 
   // ルーム退出
@@ -150,13 +163,21 @@ export default function Home() {
 
   if (roomId) {
     return (
-      <GameRoom
-        socket={socket!}
-        userId={userId}
-        username={username}
-        roomId={roomId}
-        onLeave={handleLeaveRoom}
-      />
+      <Suspense
+        fallback={(
+          <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">
+            ゲーム画面を読み込み中...
+          </div>
+        )}
+      >
+        <GameRoom
+          socket={socket!}
+          userId={userId}
+          username={username}
+          roomId={roomId}
+          onLeave={handleLeaveRoom}
+        />
+      </Suspense>
     )
   }
 
