@@ -23,6 +23,8 @@ describe('Socket.IO Integration Tests', () => {
   let serverPort: number;
   let roomManager: RoomManager;
 
+  let timers: NodeJS.Timeout[] = [];
+
   beforeAll((done) => {
     httpServer = createServer();
     io = new SocketIOServer(httpServer, {
@@ -32,7 +34,7 @@ describe('Socket.IO Integration Tests', () => {
     });
 
     roomManager = new RoomManager();
-    setupSocketHandlers(io, roomManager);
+    timers = setupSocketHandlers(io, roomManager);
 
     httpServer.listen(() => {
       const address = httpServer.address() as AddressInfo;
@@ -42,6 +44,7 @@ describe('Socket.IO Integration Tests', () => {
   });
 
   afterAll((done) => {
+    timers.forEach(clearTimeout);
     io.close(() => {
       httpServer.close(() => {
         done();

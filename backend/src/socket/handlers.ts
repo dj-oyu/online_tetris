@@ -11,9 +11,11 @@ interface UserData {
 // ソケット接続とユーザーIDのマッピング
 const socketToUser = new Map<string, UserData>();
 
-export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
-  // 定期的なゲーム状態の更新
-  setInterval(() => {
+export function setupSocketHandlers(io: Server, roomManager: RoomManager): NodeJS.Timeout[] {
+  const timers: NodeJS.Timeout[] = [];
+
+  // ゲームのメインループ
+  const gameLoop = () => {
     const activeRooms = roomManager.getActiveRooms();
     
     for (const room of activeRooms) {
@@ -35,12 +37,17 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
         io.to(`room:${room.getId()}`).emit('gameState', gameState);
       }
     }
-  }, 100); // 100msごとに更新（10fps）
+    timers[0] = setTimeout(gameLoop, 100);
+  };
 
-  // 定期的な非アクティブルームのクリーンアップ
-  setInterval(() => {
+  // 非アクティブルームのクリーンアップループ
+  const cleanupLoop = () => {
     roomManager.cleanupInactiveRooms();
-  }, 30 * 60 * 1000); // 30分ごとに実行
+    timers[1] = setTimeout(cleanupLoop, 30 * 60 * 1000);
+  };
+
+  timers.push(setTimeout(gameLoop, 100));
+  timers.push(setTimeout(cleanupLoop, 30 * 60 * 1000));
 
   // 接続イベント
   io.on('connection', (socket: Socket) => {
@@ -236,6 +243,8 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
       console.log(`Disconnected: ${socket.id}, reason: ${reason}`);
     });
   });
+
+  return timers;
 }
 
 // 現在のルームから退出する

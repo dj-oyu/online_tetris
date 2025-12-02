@@ -31,7 +31,7 @@ const io = new Server(server, {
 const roomManager = new RoomManager();
 
 // ソケットハンドラーの設定
-setupSocketHandlers(io, roomManager);
+void setupSocketHandlers(io, roomManager);
 
 // Engine.IOレベルの接続ログ
 io.engine.on('connection', (rawSocket) => {
