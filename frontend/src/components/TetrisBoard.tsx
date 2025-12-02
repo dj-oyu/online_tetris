@@ -27,13 +27,20 @@ const TetrisBoard = memo(function TetrisBoard({ board, currentPiece }: TetrisBoa
   // 型から色取得
   const getColor = (type: string) => {
     switch (type) {
-      case 'I': return 'bg-cyan-400'
-      case 'J': return 'bg-blue-500'
-      case 'L': return 'bg-orange-500'
-      case 'O': return 'bg-yellow-300'
-      case 'S': return 'bg-green-500'
-      case 'T': return 'bg-purple-500'
-      case 'Z': return 'bg-red-500'
+      case 'I':
+      case '1': return 'bg-cyan-400'
+      case 'J':
+      case '2': return 'bg-blue-500'
+      case 'L':
+      case '3': return 'bg-orange-500'
+      case 'O':
+      case '4': return 'bg-yellow-300'
+      case 'S':
+      case '5': return 'bg-green-500'
+      case 'T':
+      case '6': return 'bg-purple-500'
+      case 'Z':
+      case '7': return 'bg-red-500'
       case '8': return 'bg-gray-600'
       default: return 'bg-black'
     }
