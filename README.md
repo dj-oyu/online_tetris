@@ -1,5 +1,20 @@
 # Online Tetris
 
+オンライン対戦型テトリスゲーム。Next.js + Socket.IOを使用したリアルタイム対戦ゲームです。
+
+## 🎮 現在の状況
+
+✅ **Phase 0: 基盤修正・安定化 完了**（2025-12-02）
+- TetrisGameコンポーネントの表示問題解決
+- Socket.IO自動再接続機能実装
+- TypeScript型安全性の向上
+- React最適化（memo, useCallback, useMemo）
+- テストカバレッジ: フロントエンド40件、バックエンド72件
+
+詳細は [`docs/6_milestones.md`](./docs/6_milestones.md) を参照してください。
+
+## 開発環境
+
 開発セットアップを `pnpm` ワークスペースで統一しました。プロジェクトルートで 1 回 `pnpm install` すればフロントエンド・バックエンドの依存関係がまとめて入ります。
 
 ## 前提

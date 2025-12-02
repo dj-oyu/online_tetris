@@ -1,8 +1,9 @@
 'use client'
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import TetrisGame from './TetrisGame'
 import { Socket } from 'socket.io-client'
 import MiniBoard from './MiniBoard'
+import { GameState, RoomInfo, PlayerInfo, ChatMessage } from '@/types/game'
 
 interface GameRoomProps {
   socket: Socket | null
@@ -12,123 +13,127 @@ interface GameRoomProps {
   onLeave: () => void
 }
 
-interface PlayerInfo {
-  id: string
-  username: string
-  isReady: boolean
-}
-
 export default function GameRoom({ socket, roomId, userId, username, onLeave }: GameRoomProps) {
-  const [roomInfo, setRoomInfo] = useState<any>(null)
-  const [gameState, setGameState] = useState<any>(null)
+  const [roomInfo, setRoomInfo] = useState<RoomInfo | null>(null)
+  const [gameState, setGameState] = useState<GameState | null>(null)
   const [isReady, setIsReady] = useState<boolean>(false)
-  const [chatMessages, setChatMessages] = useState<any[]>([])
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
   const [messageInput, setMessageInput] = useState<string>('')
   const [isSpectator, setIsSpectator] = useState<boolean>(false)
   
+  // 初期マウント時にルーム・ゲーム状態を同期
   useEffect(() => {
     if (!socket || !roomId) return
-    
-    // ルーム情報が更新された時
-    socket.on('roomUpdated', (info) => {
+    socket.emit('syncRoomState')
+  }, [socket, roomId])
+
+  // ルーム状態・ゲーム状態の更新を監視
+  useEffect(() => {
+    if (!socket) return
+
+    const handleRoomUpdated = (info: RoomInfo) => {
       setRoomInfo(info)
-      
-      // 自分が観戦者かどうかを判定
       const playerIds = info.players.map((p: PlayerInfo) => p.id)
       setIsSpectator(!playerIds.includes(userId))
-    })
-    
-    // ゲーム状態が更新された時
-    socket.on('gameState', (state) => {
+    }
+
+    const handleGameState = (state: GameState) => {
       setGameState(state)
-      
-      // 自分が観戦者になった場合
       if (state.spectators.includes(userId)) {
         setIsSpectator(true)
       }
-    })
-    
-    // プレイヤーが参加した時
-    socket.on('playerJoined', (data) => {
+    }
+
+    socket.on('roomUpdated', handleRoomUpdated)
+    socket.on('gameState', handleGameState)
+
+    return () => {
+      socket.off('roomUpdated', handleRoomUpdated)
+      socket.off('gameState', handleGameState)
+    }
+  }, [socket, userId])
+
+  // チャット・通知イベントを監視
+  useEffect(() => {
+    if (!socket) return
+
+    const handlePlayerJoined = (data: { username: string; isPlayer: boolean }) => {
       addChatMessage({
         system: true,
         message: `${data.username}が${data.isPlayer ? '参加' : '観戦'}しました`
       })
-    })
-    
-    // プレイヤーが退出した時
-    socket.on('playerLeft', (data) => {
+    }
+
+    const handlePlayerLeft = (data: { username: string }) => {
       addChatMessage({
         system: true,
         message: `${data.username}が退出しました`
       })
-    })
-    
-    // チャットメッセージを受信した時
-    socket.on('chatMessage', (message) => {
+    }
+
+    const handleChatMessage = (message: ChatMessage) => {
       addChatMessage(message)
-    })
-    
-    // ゲームオーバーの通知
-    socket.on('gameOver', (data) => {
+    }
+
+    const handleGameOver = (data: { playerName: string }) => {
       addChatMessage({
         system: true,
         message: `ゲーム終了! ${data.playerName}の勝利です!`
       })
-    })
-
-    // 初回マウント時に現在のルーム・ゲーム状態を再同期
-    socket.emit('syncRoomState')
-    
-    return () => {
-      socket.off('roomUpdated')
-      socket.off('gameState')
-      socket.off('playerJoined')
-      socket.off('playerLeft')
-      socket.off('chatMessage')
-      socket.off('gameOver')
     }
-  }, [socket, userId, roomId])
+
+    socket.on('playerJoined', handlePlayerJoined)
+    socket.on('playerLeft', handlePlayerLeft)
+    socket.on('chatMessage', handleChatMessage)
+    socket.on('gameOver', handleGameOver)
+
+    return () => {
+      socket.off('playerJoined', handlePlayerJoined)
+      socket.off('playerLeft', handlePlayerLeft)
+      socket.off('chatMessage', handleChatMessage)
+      socket.off('gameOver', handleGameOver)
+    }
+  }, [socket, addChatMessage])
   
   // チャットメッセージを追加
-  const addChatMessage = (message: any) => {
+  const addChatMessage = useCallback((message: Partial<ChatMessage>) => {
     setChatMessages((prev) => [...prev, {
       ...message,
       id: Date.now()
-    }])
-  }
-  
+    } as ChatMessage])
+  }, [])
+
   // メッセージを送信
-  const sendMessage = () => {
+  const sendMessage = useCallback(() => {
     if (!socket || !messageInput.trim()) return
-    
+
     socket.emit('chatMessage', { message: messageInput })
     setMessageInput('')
-  }
-  
+  }, [socket, messageInput])
+
   // 準備状態を切り替え
-  const toggleReady = () => {
+  const toggleReady = useCallback(() => {
     if (!socket) return
-    
+
     const newState = !isReady
     socket.emit('playerReady', { ready: newState })
     setIsReady(newState)
-  }
-  
+  }, [socket, isReady])
+
   // ルームから退出
-  const leaveRoom = () => {
+  const leaveRoom = useCallback(() => {
     if (!socket) return
-    
+
     socket.emit('leaveRoom')
     onLeave()
-  }
-  
+  }, [socket, onLeave])
+
   // ゲームアクションを送信
-  const sendGameAction = (action: string, data?: any) => {
+  const sendGameAction = useCallback((action: string, data?: any) => {
     if (!socket || isSpectator) return
-    
+
     socket.emit('gameAction', { action, data })
-  }
+  }, [socket, isSpectator])
   
   if (!roomInfo) {
     return (
@@ -144,15 +149,18 @@ export default function GameRoom({ socket, roomId, userId, username, onLeave }: 
   const isFinished = roomInfo.state === 'finished'
   
   // 自分のプレイヤー情報を取得
-  const myPlayer = gameState?.players?.[userId]
-  
+  const myPlayer = useMemo(() => gameState?.players?.[userId], [gameState, userId])
+
   // 他のプレイヤー情報を取得
-  const otherPlayers = gameState ? Object.entries(gameState.players)
-    .filter(([id]: [string, any]) => id !== userId)
-    .map(([id, data]: [string, any]) => ({
-      id,
-      ...data
-    })) : []
+  const otherPlayers = useMemo(() => {
+    if (!gameState) return []
+    return Object.entries(gameState.players)
+      .filter(([id]) => id !== userId)
+      .map(([id, data]) => ({
+        id,
+        ...data
+      }))
+  }, [gameState, userId])
   
   return (
     <div className="flex flex-col h-screen max-h-screen py-4">

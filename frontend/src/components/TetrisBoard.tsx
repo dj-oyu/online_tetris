@@ -1,5 +1,5 @@
 'use client'
-import React, { useMemo } from 'react'
+import React, { useMemo, memo } from 'react'
 import { SHAPES, Piece } from '@/lib/tetrominos'
 
 interface TetrisBoardProps {
@@ -11,7 +11,7 @@ interface TetrisBoardProps {
  * TetrisBoard
  * - 親要素 300×600px に合わせて自動調整するグリッド
  */
-export default function TetrisBoard({ board, currentPiece }: TetrisBoardProps) {
+const TetrisBoard = memo(function TetrisBoard({ board, currentPiece }: TetrisBoardProps) {
   // 現在のピース位置リスト
   const currentPositions = useMemo(() => {
     if (!currentPiece) return []
@@ -53,4 +53,6 @@ export default function TetrisBoard({ board, currentPiece }: TetrisBoardProps) {
       )}
     </div>
   )
-}
+})
+
+export default TetrisBoard

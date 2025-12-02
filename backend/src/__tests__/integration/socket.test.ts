@@ -247,6 +247,64 @@ describe('Socket.IO Integration Tests', () => {
         done();
       });
     });
+
+    it('should support callback parameter on joinRoom for success', (done) => {
+      clientSocket2 = ioClient(`http://localhost:${serverPort}`, {
+        transports: ['websocket'],
+      });
+
+      clientSocket2.on('connect', () => {
+        clientSocket2.emit('auth', { userId: 'user2', username: 'TestUser2' });
+      });
+
+      clientSocket2.on('authSuccess', () => {
+        clientSocket2.emit('joinRoom', { roomId }, (result: { success: boolean; message?: string }) => {
+          expect(result).toBeDefined();
+          expect(result.success).toBe(true);
+          done();
+        });
+      });
+    });
+
+    it('should support callback parameter on joinRoom for failure', (done) => {
+      clientSocket1.emit('joinRoom', { roomId: 'invalid-room-id' }, (result: { success: boolean; message?: string }) => {
+        expect(result).toBeDefined();
+        expect(result.success).toBe(false);
+        expect(result.message).toBeDefined();
+        done();
+      });
+    });
+
+    it('should handle syncRoomState event', (done) => {
+      clientSocket2 = ioClient(`http://localhost:${serverPort}`, {
+        transports: ['websocket'],
+      });
+
+      clientSocket2.on('connect', () => {
+        clientSocket2.emit('auth', { userId: 'user2', username: 'TestUser2' });
+      });
+
+      clientSocket2.on('authSuccess', () => {
+        clientSocket2.emit('joinRoom', { roomId });
+      });
+
+      let receivedEvents = 0;
+
+      clientSocket2.on('roomUpdated', (roomInfo) => {
+        receivedEvents++;
+        if (receivedEvents === 1) {
+          // First roomUpdated from joining
+          expect(roomInfo).toBeDefined();
+          // Request sync
+          clientSocket2.emit('syncRoomState');
+        } else if (receivedEvents === 2) {
+          // Second roomUpdated from syncRoomState
+          expect(roomInfo).toBeDefined();
+          expect(roomInfo.playerCount).toBe(2);
+          done();
+        }
+      });
+    });
   });
 
   describe('Game Flow', () => {
