@@ -68,40 +68,44 @@ export default function TetrisGame({ gameState, playerId, isSpectator, onAction 
   const isGameOver = playerState?.isGameOver || false
   const isWinner = gameState.winner === playerId
 
-  // ゲームの表示内容を決定
-  let boardToShow
-  let currentPiece = null
-  let nextPiece = null
+  // ゲームの表示内容を決定（useMemoで最適化）
+  const { boardToShow, currentPiece, nextPiece } = useMemo(() => {
+    let board
+    let current = null
+    let next = null
 
-  if (playerState) {
-    // 自分のプレイヤーデータがある場合
-    boardToShow = playerState.board
-    currentPiece = playerState.currentPiece
-    nextPiece = playerState.nextPiece
-  } else if (gameState.activePlayers?.length > 0) {
-    // 観戦モードの場合は一番最初のアクティブプレイヤーを表示
-    const firstPlayerId = gameState.activePlayers[0]
-    const firstPlayerState = gameState.players?.[firstPlayerId]
-    boardToShow = firstPlayerState?.board
-    // 観戦モードでは相手のピースは表示しない
-  } else if (gameState.spectators?.length > 0) {
-    // アクティブプレイヤーがいない場合は最初の観戦者を表示
-    const firstSpectatorId = gameState.spectators[0]
-    const spectatorState = gameState.players?.[firstSpectatorId]
-    boardToShow = spectatorState?.board
-  }
+    if (playerState) {
+      // 自分のプレイヤーデータがある場合
+      board = playerState.board
+      current = playerState.currentPiece
+      next = playerState.nextPiece
+    } else if (gameState.activePlayers?.length > 0) {
+      // 観戦モードの場合は一番最初のアクティブプレイヤーを表示
+      const firstPlayerId = gameState.activePlayers[0]
+      const firstPlayerState = gameState.players?.[firstPlayerId]
+      board = firstPlayerState?.board
+      // 観戦モードでは相手のピースは表示しない
+    } else if (gameState.spectators?.length > 0) {
+      // アクティブプレイヤーがいない場合は最初の観戦者を表示
+      const firstSpectatorId = gameState.spectators[0]
+      const spectatorState = gameState.players?.[firstSpectatorId]
+      board = spectatorState?.board
+    }
 
-  // ボードが存在しない場合は空のボードを表示
-  if (!boardToShow) {
-    boardToShow = Array(20).fill(0).map(() => Array(10).fill(0))
-  }
+    // ボードが存在しない場合は空のボードを表示
+    if (!board) {
+      board = Array(20).fill(0).map(() => Array(10).fill(0))
+    }
+
+    return { boardToShow: board, currentPiece: current, nextPiece: next }
+  }, [gameState, playerState, playerId, isSpectator])
 
   
   return (
     <div className="relative flex items-center justify-center h-full w-full">
       <div className="flex items-center">
         {/* メインのテトリスボード */}
-        <div className="relative w-full h-full">
+        <div className="relative w-[300px] h-[600px]">
           <TetrisBoard
             board={boardToShow}
             currentPiece={!isSpectator ? currentPiece : null}
