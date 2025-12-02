@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useMemo } from 'react'
 import TetrisBoard from './TetrisBoard'
 import useKeyboardControls from '@/hooks/useKeyboardControls'
 import { GameState } from '@/types/game'
