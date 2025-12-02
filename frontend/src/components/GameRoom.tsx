@@ -21,72 +21,79 @@ export default function GameRoom({ socket, roomId, userId, username, onLeave }: 
   const [messageInput, setMessageInput] = useState<string>('')
   const [isSpectator, setIsSpectator] = useState<boolean>(false)
   
+  // 初期マウント時にルーム・ゲーム状態を同期
   useEffect(() => {
     if (!socket || !roomId) return
-
-    // 初期マウント時にルーム・ゲーム状態を同期
     socket.emit('syncRoomState')
+  }, [socket, roomId])
 
-    // ルーム情報が更新された時
-    socket.on('roomUpdated', (info) => {
+  // ルーム状態・ゲーム状態の更新を監視
+  useEffect(() => {
+    if (!socket) return
+
+    const handleRoomUpdated = (info: RoomInfo) => {
       setRoomInfo(info)
-
-      // 自分が観戦者かどうかを判定
       const playerIds = info.players.map((p: PlayerInfo) => p.id)
       setIsSpectator(!playerIds.includes(userId))
-    })
+    }
 
-    // ゲーム状態が更新された時
-    socket.on('gameState', (state) => {
+    const handleGameState = (state: GameState) => {
       setGameState(state)
-
-      // 自分が観戦者になった場合
       if (state.spectators.includes(userId)) {
         setIsSpectator(true)
       }
-    })
-    
-    // プレイヤーが参加した時
-    socket.on('playerJoined', (data) => {
+    }
+
+    socket.on('roomUpdated', handleRoomUpdated)
+    socket.on('gameState', handleGameState)
+
+    return () => {
+      socket.off('roomUpdated', handleRoomUpdated)
+      socket.off('gameState', handleGameState)
+    }
+  }, [socket, userId])
+
+  // チャット・通知イベントを監視
+  useEffect(() => {
+    if (!socket) return
+
+    const handlePlayerJoined = (data: { username: string; isPlayer: boolean }) => {
       addChatMessage({
         system: true,
         message: `${data.username}が${data.isPlayer ? '参加' : '観戦'}しました`
       })
-    })
-    
-    // プレイヤーが退出した時
-    socket.on('playerLeft', (data) => {
+    }
+
+    const handlePlayerLeft = (data: { username: string }) => {
       addChatMessage({
         system: true,
         message: `${data.username}が退出しました`
       })
-    })
-    
-    // チャットメッセージを受信した時
-    socket.on('chatMessage', (message) => {
+    }
+
+    const handleChatMessage = (message: ChatMessage) => {
       addChatMessage(message)
-    })
-    
-    // ゲームオーバーの通知
-    socket.on('gameOver', (data) => {
+    }
+
+    const handleGameOver = (data: { playerName: string }) => {
       addChatMessage({
         system: true,
         message: `ゲーム終了! ${data.playerName}の勝利です!`
       })
-    })
-
-    // 初回マウント時に現在のルーム・ゲーム状態を再同期
-    socket.emit('syncRoomState')
-    
-    return () => {
-      socket.off('roomUpdated')
-      socket.off('gameState')
-      socket.off('playerJoined')
-      socket.off('playerLeft')
-      socket.off('chatMessage')
-      socket.off('gameOver')
     }
-  }, [socket, userId, roomId])
+
+    socket.on('playerJoined', handlePlayerJoined)
+    socket.on('playerLeft', handlePlayerLeft)
+    socket.on('chatMessage', handleChatMessage)
+    socket.on('gameOver', handleGameOver)
+
+    return () => {
+      socket.off('playerJoined', handlePlayerJoined)
+      socket.off('playerLeft', handlePlayerLeft)
+      socket.off('chatMessage', handleChatMessage)
+      socket.off('gameOver', handleGameOver)
+    }
+  }, [socket, addChatMessage])
   
   // チャットメッセージを追加
   const addChatMessage = useCallback((message: Partial<ChatMessage>) => {
