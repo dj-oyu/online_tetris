@@ -137,20 +137,7 @@ export default function GameRoom({ socket, roomId, userId, username, onLeave }: 
 
     socket.emit('gameAction', { action, data })
   }, [socket, isSpectator])
-  
-  if (!roomInfo) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-xl">ルーム情報を読み込み中...</div>
-      </div>
-    )
-  }
-  
-  const isPlaying = roomInfo.state === 'playing'
-  const isStarting = roomInfo.state === 'starting'
-  const isWaiting = roomInfo.state === 'waiting'
-  const isFinished = roomInfo.state === 'finished'
-  
+
   // 自分のプレイヤー情報を取得
   const myPlayer = useMemo(() => gameState?.players?.[userId], [gameState, userId])
 
@@ -164,6 +151,19 @@ export default function GameRoom({ socket, roomId, userId, username, onLeave }: 
         ...data
       }))
   }, [gameState, userId])
+
+  if (!roomInfo) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-xl">ルーム情報を読み込み中...</div>
+      </div>
+    )
+  }
+
+  const isPlaying = roomInfo.state === 'playing'
+  const isStarting = roomInfo.state === 'starting'
+  const isWaiting = roomInfo.state === 'waiting'
+  const isFinished = roomInfo.state === 'finished'
   
   return (
     <div className="flex flex-col h-screen max-h-screen py-4">
