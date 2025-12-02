@@ -11,11 +11,15 @@ interface UserData {
 // ソケット接続とユーザーIDのマッピング
 const socketToUser = new Map<string, UserData>();
 
+// 各プレイヤーの最後の自動落下時刻を記録（key: playerId）
+const lastAutoDropTime = new Map<string, number>();
+
 export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
   // 定期的なゲーム状態の更新
   setInterval(() => {
     const activeRooms = roomManager.getActiveRooms();
-    
+    const currentTime = Date.now();
+
     for (const room of activeRooms) {
       // 強制スタート判定
       if (
@@ -32,7 +36,38 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
 
       if (room.getState() === RoomState.PLAYING) {
         const gameState = room.getGameState();
-        io.to(`room:${room.getId()}`).emit('gameState', gameState);
+
+        // 自動落下処理：各アクティブプレイヤーについて処理
+        if (gameState.isActive && gameState.activePlayers) {
+          for (const playerId of gameState.activePlayers) {
+            const lastDropTime = lastAutoDropTime.get(playerId) || 0;
+            const timeSinceLastDrop = currentTime - lastDropTime;
+
+            // 1秒（1000ms）経過したら自動落下
+            if (timeSinceLastDrop >= 1000) {
+              room.processPlayerAction(playerId, 'moveDown', {});
+              lastAutoDropTime.set(playerId, currentTime);
+            }
+          }
+        }
+
+        // 更新されたゲーム状態を送信
+        const updatedGameState = room.getGameState();
+        io.to(`room:${room.getId()}`).emit('gameState', updatedGameState);
+
+        // ゲーム終了判定
+        if (updatedGameState.winner) {
+          room.endGame();
+          io.to(`room:${room.getId()}`).emit('gameOver', {
+            winner: updatedGameState.winner,
+            playerName: updatedGameState.players[updatedGameState.winner]?.username || 'Unknown'
+          });
+
+          // 終了したプレイヤーの記録を削除
+          for (const playerId of Object.keys(updatedGameState.players)) {
+            lastAutoDropTime.delete(playerId);
+          }
+        }
       }
     }
   }, 100); // 100msごとに更新（10fps）
@@ -241,14 +276,17 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
 // 現在のルームから退出する
 function leaveCurrentRoom(socket: Socket, user: UserData, roomManager: RoomManager): void {
   if (!user.roomId) return;
-  
+
   // ルームから退出
   socket.leave(`room:${user.roomId}`);
-  
+
   const roomObj = roomManager.getRoom(user.roomId);
   if (roomObj) {
     roomObj.removePlayer(user.id);
-    
+
+    // 自動落下タイマーの記録を削除
+    lastAutoDropTime.delete(user.id);
+
     // プレイヤー退出を通知
     socket.to(`room:${user.roomId}`).emit('playerLeft', {
       playerId: user.id,
