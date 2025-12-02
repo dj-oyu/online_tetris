@@ -22,21 +22,24 @@ export default function GameRoom({ socket, roomId, userId, username, onLeave }: 
   const [isSpectator, setIsSpectator] = useState<boolean>(false)
   
   useEffect(() => {
-    if (!socket) return
-    
+    if (!socket || !roomId) return
+
+    // 初期マウント時にルーム・ゲーム状態を同期
+    socket.emit('syncRoomState')
+
     // ルーム情報が更新された時
     socket.on('roomUpdated', (info) => {
       setRoomInfo(info)
-      
+
       // 自分が観戦者かどうかを判定
       const playerIds = info.players.map((p: PlayerInfo) => p.id)
       setIsSpectator(!playerIds.includes(userId))
     })
-    
+
     // ゲーム状態が更新された時
     socket.on('gameState', (state) => {
       setGameState(state)
-      
+
       // 自分が観戦者になった場合
       if (state.spectators.includes(userId)) {
         setIsSpectator(true)
@@ -71,6 +74,9 @@ export default function GameRoom({ socket, roomId, userId, username, onLeave }: 
         message: `ゲーム終了! ${data.playerName}の勝利です!`
       })
     })
+
+    // 初回マウント時に現在のルーム・ゲーム状態を再同期
+    socket.emit('syncRoomState')
     
     return () => {
       socket.off('roomUpdated')
@@ -80,7 +86,7 @@ export default function GameRoom({ socket, roomId, userId, username, onLeave }: 
       socket.off('chatMessage')
       socket.off('gameOver')
     }
-  }, [socket, userId])
+  }, [socket, userId, roomId])
   
   // チャットメッセージを追加
   const addChatMessage = useCallback((message: Partial<ChatMessage>) => {

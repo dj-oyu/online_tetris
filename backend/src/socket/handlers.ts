@@ -100,16 +100,18 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
     });
 
     // ルーム参加
-    socket.on('joinRoom', (data: { roomId: string }) => {
+    socket.on('joinRoom', (data: { roomId: string }, callback?: (result: { success: boolean; message?: string }) => void) => {
       const user = socketToUser.get(socket.id);
       if (!user) {
         socket.emit('error', { message: 'Not authenticated' });
+        callback?.({ success: false, message: 'Not authenticated' });
         return;
       }
-      
+
       const room = roomManager.getRoom(data.roomId);
       if (!room) {
         socket.emit('error', { message: 'Room not found' });
+        callback?.({ success: false, message: 'Room not found' });
         return;
       }
       
@@ -131,6 +133,8 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
       // ルーム情報を全プレイヤーに通知
       io.to(`room:${room.getId()}`).emit('roomUpdated', room.getRoomInfo());
       io.to(`room:${room.getId()}`).emit('gameState', room.getGameState());
+
+      callback?.({ success: true });
       
       // プレイヤー参加を通知
       socket.to(`room:${room.getId()}`).emit('playerJoined', {
@@ -146,6 +150,18 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
       
       const now = new Date().toISOString();
       console.log(`${now} [JOIN] ${user.username} joined room: ${room.getId()}`);
+    });
+
+    // ルーム・ゲーム状態の再同期（初期マウント時などに使用）
+    socket.on('syncRoomState', () => {
+      const user = socketToUser.get(socket.id);
+      if (!user || !user.roomId) return;
+
+      const room = roomManager.getRoom(user.roomId);
+      if (!room) return;
+
+      socket.emit('roomUpdated', room.getRoomInfo());
+      socket.emit('gameState', room.getGameState());
     });
 
     // ルーム退出

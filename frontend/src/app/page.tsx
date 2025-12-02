@@ -1,9 +1,11 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { Suspense, useEffect, useState } from 'react'
+import dynamic from 'next/dynamic'
 import { v4 as uuidv4 } from 'uuid'
 import { io, Socket } from 'socket.io-client'
-import GameRoom from '@/components/GameRoom'
 import { RoomInfo } from '@/types/game'
+
+const GameRoom = dynamic(() => import('@/components/GameRoom'), { suspense: true })
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8080'
 
@@ -23,18 +25,18 @@ export default function Home() {
       const storedUserId = localStorage.getItem('tetris_userId')
       const newUserId = storedUserId || uuidv4()
       setUserId(newUserId)
-      
+
       if (!storedUserId) {
         localStorage.setItem('tetris_userId', newUserId)
       }
-      
+
       // ユーザー名もローカルストレージから復元
       const storedUsername = localStorage.getItem('tetris_username')
       if (storedUsername) {
         setUsername(storedUsername)
       }
     }
-    
+
     if (userId && !socket) {
       // Socket.IO接続を確立
       const newSocket = io(BACKEND_URL, {
@@ -95,6 +97,12 @@ export default function Home() {
         newSocket.emit('getRooms')
       })
 
+      newSocket.on('error', (serverError) => {
+        console.error('Socket error:', serverError)
+        const message = typeof serverError === 'object' ? serverError?.message : serverError
+        setError(message || 'サーバーでエラーが発生しました。')
+      })
+
       newSocket.on('disconnect', (reason) => {
         console.log('Disconnected from server, reason:', reason)
         setIsConnected(false)
@@ -116,12 +124,6 @@ export default function Home() {
       // 30秒経過で強制スタート通知
       newSocket.on('forceStart', (data) => {
         alert(data?.message || '30秒経過で強制スタートします')
-      })
-
-      // エラーハンドリング
-      newSocket.on('error', (error: { message: string }) => {
-        console.error('Socket error:', error)
-        setError(error.message || 'エラーが発生しました。')
       })
 
       setSocket(newSocket)
@@ -148,10 +150,17 @@ export default function Home() {
 
   // ルーム参加
   const handleJoinRoom = (roomId: string) => {
-    if (socket) {
-      socket.emit('joinRoom', { roomId })
-      setRoomId(roomId)
-    }
+    if (!socket) return
+
+    socket.emit('joinRoom', { roomId }, (result?: { success: boolean; message?: string }) => {
+      if (result?.success) {
+        setRoomId(roomId)
+        setError(null)
+        return
+      }
+
+      setError(result?.message || 'ルームに参加できませんでした。')
+    })
   }
 
   // ルーム退出
@@ -189,13 +198,15 @@ export default function Home() {
 
   if (roomId) {
     return (
-      <GameRoom
-        socket={socket!}
-        userId={userId}
-        username={username}
-        roomId={roomId}
-        onLeave={handleLeaveRoom}
-      />
+      <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><div className="text-xl">ルーム情報を読み込み中...</div></div>}>
+        <GameRoom
+          socket={socket!}
+          userId={userId}
+          username={username}
+          roomId={roomId}
+          onLeave={handleLeaveRoom}
+        />
+      </Suspense>
     )
   }
 
