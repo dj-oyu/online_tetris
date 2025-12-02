@@ -1,0 +1,21 @@
+{
+  "name": "online-tetris",
+  "version": "1.0.0",
+  "private": true,
+  "packageManager": "pnpm@9.14.4",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter ./backend --filter ./frontend dev",
+    "dev:backend": "pnpm --filter ./backend dev",
+    "dev:frontend": "pnpm --filter ./frontend dev",
+    "build": "pnpm --filter ./backend build && pnpm --filter ./frontend build",
+    "build:backend": "pnpm --filter ./backend build",
+    "build:frontend": "pnpm --filter ./frontend build",
+    "test": "pnpm --filter ./backend test && pnpm --filter ./frontend test",
+    "test:backend": "pnpm --filter ./backend test",
+    "test:frontend": "pnpm --filter ./frontend test",
+    "lint": "pnpm --filter ./frontend lint"
+  }
+}
